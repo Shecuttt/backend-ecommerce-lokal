@@ -1,0 +1,128 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  CANCELED
+}
+
+enum PaymentMethod {
+  COD
+  TRANSFER
+  EWALLET
+}
+
+model User {
+  user_id       Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  password_hash String
+  role          Role     @default(CUSTOMER)
+  phone_number  String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relations
+  products   Product[]   @relation("UserProducts")
+  carts      Cart[]      @relation("UserCarts")
+  orders     Order[]     @relation("UserOrders")
+
+  @@map("users")
+}
+
+model Product {
+  product_id  Int      @id @default(autoincrement())
+  user_id     Int
+  name        String
+  description String?
+  price       Int      // Store price in cents (e.g., 1000 = $10.00)
+  stock       Int      @default(0)
+  image_url   String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  user        User        @relation("UserProducts", fields: [user_id], references: [user_id], onDelete: Cascade)
+  cart_items  CartItem[]  @relation("ProductCartItems")
+  order_items OrderItem[] @relation("ProductOrderItems")
+
+  @@map("products")
+}
+
+model Cart {
+  cart_id    Int      @id @default(autoincrement())
+  user_id    Int
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  user  User       @relation("UserCarts", fields: [user_id], references: [user_id], onDelete: Cascade)
+  items CartItem[] @relation("CartItems")
+
+  // One cart per user constraint
+  @@unique([user_id])
+  @@map("carts")
+}
+
+model CartItem {
+  cart_item_id   Int   @id @default(autoincrement())
+  cart_id        Int
+  product_id     Int
+  quantity       Int   @default(1)
+  price_at_added Int   // Price when item was added to cart
+
+  // Relations
+  cart    Cart    @relation("CartItems", fields: [cart_id], references: [cart_id], onDelete: Cascade)
+  product Product @relation("ProductCartItems", fields: [product_id], references: [product_id], onDelete: Cascade)
+
+  // Unique constraint: one product per cart
+  @@unique([cart_id, product_id])
+  @@map("cart_items")
+}
+
+model Order {
+  order_id         Int           @id @default(autoincrement())
+  user_id          Int
+  status           OrderStatus   @default(PENDING)
+  total_price      Int           // Total price in cents
+  shipping_address String
+  payment_method   PaymentMethod @default(COD)
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  // Relations
+  user  User        @relation("UserOrders", fields: [user_id], references: [user_id], onDelete: Cascade)
+  items OrderItem[] @relation("OrderItems")
+
+  @@map("orders")
+}
+
+model OrderItem {
+  order_item_id Int @id @default(autoincrement())
+  order_id      Int
+  product_id    Int
+  quantity      Int
+  price         Int // Price at time of order
+
+  // Relations
+  order   Order   @relation("OrderItems", fields: [order_id], references: [order_id], onDelete: Cascade)
+  product Product @relation("ProductOrderItems", fields: [product_id], references: [product_id], onDelete: Restrict)
+
+  @@map("order_items")
+}
